@@ -1,0 +1,10 @@
+post:
+  summary: Display dashboard with KPIs from CSV
+  parameters:
+    - in: body
+      name: body
+      description: Trigger dashboard display
+      required: false
+  responses:
+    200:
+      description: Dashboard displayed

@@ -1,6 +1,8 @@
 import os
 import requests
 import json
+import csv
+from flask import abort
 
 from datetime import datetime
 from pathlib import Path
@@ -78,3 +80,20 @@ def divoom_api_call(endpoint, payload=None):
         f'{divoom_api_url}/{endpoint}',
         json.dumps(payload)
     )
+    
+def read_kpis():
+    try:
+        if not os.path.exists('data/kpis.csv'):
+            abort(404, "KPIs file not found")
+            
+        with open('data/kpis.csv', 'r') as f:
+            reader = csv.DictReader(f)
+            required_columns = ['id','name','value','icon','position_x','position_y']
+            
+            if not all(col in reader.fieldnames for col in required_columns):
+                abort(400, "CSV missing required columns")
+                
+            return list(reader)
+            
+    except Exception as e:
+        abort(500, f"Error reading KPIs: {str(e)}")

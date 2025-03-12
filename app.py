@@ -11,14 +11,6 @@ from flasgger import Swagger, swag_from
 from pixoo import Channel, Pixoo
 from PIL import Image
 
-#KPI implementation
-from flask import request
-from flask import render_template
-import matplotlib.pyplot as plt  # For graph generation
-from flask import request, render_template, send_file
-from PIL import Image  # To process images for Pixoo
-from io import BytesIO  # To store images in memory
-
 from swag import definitions
 from swag import passthrough
 
@@ -71,52 +63,61 @@ def home():
 def health():
     return 'OK'
 
-@app.route('/nba', methods=['GET'])
-def nba_form():
-    return render_template('nba_input.html')
-
-@app.route('/nba/stats', methods=['POST'])
-def nba_stats():
-    player_name = request.form.get('player').strip()  # Normalize input
-    team_name = request.form.get('team')  # Optional
-
-    # Split name into first and last name
-    name_parts = player_name.split(" ")
-    first_name = name_parts[0]
-    last_name = name_parts[1] if len(name_parts) > 1 else ""
-
-    headers = {"Authorization": BALDONTLIE_API_KEY}
-    params = {"first_name": first_name, "last_name": last_name}  # Use first & last name
-
-    response = requests.get(BALDONTLIE_API_URL, params=params, headers=headers)
-
-    print(f"API Response: {response.status_code} - {response.text}")  # Debugging
-
-    if response.status_code != 200:
-        return f"Error fetching player data. Status: {response.status_code}, Response: {response.text}", 500
-
-    data = response.json()
-    if not data["data"]:
-        return f"No player found for '{player_name}'. Try using just a last name.", 404
-
-    # If multiple players are found, filter by team (if provided)
-    players = data["data"]
-    if len(players) > 1 and team_name:
-        players = [p for p in players if p.get("team", {}).get("full_name", "").lower() == team_name.lower()]
+@app.route('/dashboard/', methods=['GET', 'POST'])
+def show_dashboard():
+    pixoo.fill_rgb(0, 0, 0)  # Clear screen
     
-    if len(players) > 1:
-        return "Multiple players found. Please specify a team name."
+    for kpi in _helpers.read_kpis():
+        try:
+            icon_path = f"icons/{kpi['icon']}.png"
+            icon = Image.open(icon_path)
+        except FileNotFoundError:
+            # Generate warning icon
+            icon = Image.new('RGB', (16, 16), color=(255, 0, 0))
+            
+        # Ensure icon is 16x16 pixels
+        icon = icon.resize((16, 16))
+        
+        pixoo.draw_image_at_location(
+            icon,
+            int(kpi['position_x']),
+            int(kpi['position_y']) - 8
+        )
+        
+        # Add text truncation
+        value = str(kpi['value'])[:3]  # Max 3 characters
+        
+        pixoo.draw_text_at_location_rgb(
+            value,
+            int(kpi['position_x']) + 16,
+            int(kpi['position_y']),
+            255, 255, 255
+        )
+        
+    pixoo.push()
+    return 'OK'
 
-    player = players[0]
-    player_stats = {
-        "name": f"{player['first_name']} {player['last_name']}",
-        "team": player["team"]["full_name"],
-        "position": player.get("position", "N/A"),
-        "height": player.get("height", "N/A"),
-        "weight": player.get("weight", "N/A"),
-    }
-
-    return render_template("nba_stats.html", stats=player_stats)
+@app.route('/dashboard/test/', methods=['GET', 'POST'])
+def test_layout():
+    pixoo.fill_rgb(0, 0, 0)
+    
+    # Draw grid lines
+    pixoo.draw_line_from_start_to_stop_rgb(32, 0, 32, 64, 50, 50, 50)  # Vertical
+    pixoo.draw_line_from_start_to_stop_rgb(0, 32, 64, 32, 50, 50, 50)  # Horizontal
+    
+    # Quadrant labels
+    positions = [
+        (8, 16), (40, 16),
+        (8, 48), (40, 48)
+    ]
+    
+    for i, (x, y) in enumerate(positions):
+        pixoo.draw_text_at_location_rgb(
+            str(i+1), x, y-8, 255, 255, 255
+        )
+    
+    pixoo.push()
+    return 'OK'
 
 @app.route('/brightness/<int:percentage>', methods=['PUT'])
 @swag_from('swag/set/brightness.yml')
